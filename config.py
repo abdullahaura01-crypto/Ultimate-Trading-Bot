@@ -5,7 +5,7 @@ load_dotenv()
 
 # --- Deriv API ---
 DERIV_API_TOKEN = os.getenv("DERIV_API_TOKEN")
-DERIV_APP_ID    = "1089"          # Deriv's public testing app ID
+DERIV_APP_ID   = os.getenv("DERIV_APP_ID", "1089")  # Read from Railway env var
 
 # --- Trading Pair ---
 SYMBOL      = os.getenv("SYMBOL", "frxEURUSD")   # EUR/USD on Deriv
