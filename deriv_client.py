@@ -9,24 +9,23 @@ logger = logging.getLogger(__name__)
 
 
 class DerivClient:
-        WS_URL = f"wss://ws.derivws.com/websockets/v3?app_id={DERIV_APP_ID}"
+    WS_URL = f"wss://ws.derivws.com/websockets/v3?app_id={DERIV_APP_ID}"
 
     def __init__(self):
-        self.ws           = None
-        self.authorized   = False
-        self.connected    = False
-        self._lock        = threading.Lock()
-        self._req_id      = 0
-        self._callbacks   = {}        # msg_type -> [callback, ...]
-        self._pending     = {}        # req_id   -> {"event": Event, "data": []}
-        self.open_trades  = {}        # contract_id -> trade info
-        self.balance      = 0.0
-        self.account_currency = "USD"
+        self.ws                = None
+        self.authorized        = False
+        self.connected         = False
+        self._lock             = threading.Lock()
+        self._req_id           = 0
+        self._callbacks        = {}          # msg_type -> [callback, ...]
+        self._pending          = {}          # req_id   -> {"event": Event, "data": []}
+        self.open_trades       = {}          # contract_id -> trade info
+        self.balance           = 0.0
+        self.account_currency  = "USD"
 
     # ──────────────────────────────────────────────
     # Connection
     # ──────────────────────────────────────────────
-
     def connect(self):
         logger.info("Connecting to Deriv WebSocket…")
         self.ws = websocket.WebSocketApp(
@@ -42,7 +41,6 @@ class DerivClient:
         )
         t.daemon = True
         t.start()
-
         # Wait up to 10 seconds for connection
         for _ in range(20):
             if self.connected:
@@ -54,7 +52,9 @@ class DerivClient:
     def _on_open(self, ws):
         self.connected = True
         logger.info("WebSocket connected — authorizing…")
-                self._send_raw({"authorize": DERIV_API_TOKEN.replace("pat_", "")})
+        # Strip pat_ prefix - legacy WS API expects raw token
+        token = DERIV_API_TOKEN.replace("pat_", "")
+        self._send_raw({"authorize": token})
 
     def _on_close(self, ws, code, msg):
         self.connected  = False
@@ -69,20 +69,18 @@ class DerivClient:
     # ──────────────────────────────────────────────
     # Message routing
     # ──────────────────────────────────────────────
-
     def _on_message(self, ws, raw):
         data = json.loads(raw)
-
         if "error" in data:
             logger.error(f"API error [{data['error'].get('code')}]: {data['error'].get('message')}")
-            req_id = data.get("req_id")
-            if req_id and req_id in self._pending:
-                self._pending[req_id]["data"].append(data)
-                self._pending[req_id]["event"].set()
+
+        req_id = data.get("req_id")
+        if req_id and req_id in self._pending:
+            self._pending[req_id]["data"].append(data)
+            self._pending[req_id]["event"].set()
             return
 
         msg_type = data.get("msg_type", "")
-
         # Authorization
         if msg_type == "authorize":
             self.authorized = True
@@ -111,7 +109,6 @@ class DerivClient:
     # ──────────────────────────────────────────────
     # Send helpers
     # ──────────────────────────────────────────────
-
     def _send_raw(self, payload: dict) -> int:
         with self._lock:
             self._req_id += 1
@@ -121,7 +118,7 @@ class DerivClient:
 
     def _send_wait(self, payload: dict, timeout: float = 15) -> dict | None:
         """Send and block until response arrives."""
-        event = threading.Event()
+        event  = threading.Event()
         result = []
         req_id = self._send_raw(payload)
         self._pending[req_id] = {"event": event, "data": result}
@@ -135,7 +132,6 @@ class DerivClient:
     # ──────────────────────────────────────────────
     # Market data
     # ──────────────────────────────────────────────
-
     def get_candles(self, symbol: str, granularity: int, count: int = 150) -> list:
         resp = self._send_wait({
             "ticks_history": symbol,
@@ -165,20 +161,19 @@ class DerivClient:
     # ──────────────────────────────────────────────
     # Trading
     # ──────────────────────────────────────────────
-
     def buy_multiplier(
         self,
         symbol: str,
-        direction: str,       # "BUY" or "SELL"
+        direction: str,   # "BUY" or "SELL"
         stake: float,
-        sl_usd: float,        # stop-loss in USD
-        tp_usd: float,        # take-profit in USD
+        sl_usd: float,    # stop-loss in USD
+        tp_usd: float,    # take-profit in USD
         multiplier: int = 10,
     ) -> dict | None:
         contract_type = "MULTUP" if direction == "BUY" else "MULTDOWN"
         resp = self._send_wait({
-            "buy"   : 1,
-            "price" : stake,
+            "buy"        : 1,
+            "price"      : stake,
             "parameters": {
                 "contract_type": contract_type,
                 "symbol"       : symbol,
