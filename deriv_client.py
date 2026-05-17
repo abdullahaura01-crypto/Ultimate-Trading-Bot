@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class DerivClient:
-    WS_URL = f"wss://ws.binaryws.com/websockets/v3?app_id={DERIV_APP_ID}"
+        WS_URL = f"wss://ws.derivws.com/websockets/v3?app_id={DERIV_APP_ID}"
 
     def __init__(self):
         self.ws           = None
@@ -54,7 +54,7 @@ class DerivClient:
     def _on_open(self, ws):
         self.connected = True
         logger.info("WebSocket connected — authorizing…")
-        self._send_raw({"authorize": DERIV_API_TOKEN})
+                self._send_raw({"authorize": DERIV_API_TOKEN.replace("pat_", "")})
 
     def _on_close(self, ws, code, msg):
         self.connected  = False
